@@ -44,7 +44,7 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); ou
 .error:empty { display: none; }
 
 label.check { display: flex; gap: 10px; align-items: flex-start; font-weight: 400; font-size: 14px; }
-label.check input { display: inline-block; width: 22px; height: 22px; min-height: 0; margin: 1px 0 0; flex: none; }
+label.check input { display: inline-block; width: 24px; height: 24px; min-height: 0; margin: 1px 0 0; flex: none; appearance: auto; -webkit-appearance: checkbox; accent-color: #e8590c; cursor: pointer; }
 .linkbtn { display: block; width: 100%; margin-top: 10px; min-height: 44px; background: none; border: 0; color: var(--accent-dark); font: inherit; font-weight: 600; cursor: pointer; }
 .info { color: var(--ok); font-size: 14px; margin: 0 0 10px; } .info:empty { display: none; }
 .legal-links { text-align: center; margin: 14px 0 0; } .app-footer { text-align: center; padding: 20px 16px 28px; }
