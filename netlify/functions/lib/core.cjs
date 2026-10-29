@@ -1,3 +1,4 @@
+// module.exports = { createApi, PLANS, FREE_ORDER_LIMIT };
 // Ядро API без внешних зависимостей. Работает на Web Request/Response (Netlify Functions v2).
 // Хранилище и fetch передаются снаружи — поэтому всё тестируется без сети.
 'use strict';
@@ -67,11 +68,11 @@ function getCookie(req, name) {
 }
 
 // ---------- вспомогательное ----------
-const isPro = (u) => !!(u.planUntil && new Date(u.planUntil).getTime() > Date.now());
+const isPro = (u) => !!(u.isOwner || (u.planUntil && new Date(u.planUntil).getTime() > Date.now()));
 const settingsOf = (u) => ({ ...DEFAULT_SETTINGS, ...(u.settings || {}) });
 function publicUser(u) {
   const pro = isPro(u);
-  return { id: u.id, email: u.email, plan: pro ? 'pro' : 'free', planUntil: pro ? u.planUntil : null,
+  return { id: u.id, email: u.email, plan: pro ? 'pro' : 'free', planUntil: pro ? (u.isOwner ? '2099-12-31T00:00:00.000Z' : u.planUntil) : null,
     settings: settingsOf(u), limits: { orders: pro ? null : FREE_ORDER_LIMIT } };
 }
 function str(v, name, { min = 0, max = 200 } = {}) {
@@ -103,6 +104,12 @@ function createApi({ store, env = process.env, fetchImpl = fetch, now = () => Da
   const SECRET = env.SESSION_SECRET;
   const ykConfigured = () => !!(env.YOOKASSA_SHOP_ID && env.YOOKASSA_SECRET_KEY && env.APP_URL);
   const ykAuth = () => 'Basic ' + Buffer.from(`${env.YOOKASSA_SHOP_ID}:${env.YOOKASSA_SECRET_KEY}`).toString('base64');
+  // Владельцы (OWNER_EMAILS через запятую) пользуются PRO без оплаты. Флаг не сохраняется в базе.
+  const owners = new Set(String(env.OWNER_EMAILS || '').split(',').map((x) => x.trim().toLowerCase()).filter(Boolean));
+  const markOwner = (u) => {
+    if (u && owners.has(u.email) && !u.isOwner) Object.defineProperty(u, 'isOwner', { value: true, enumerable: false });
+    return u;
+  };
   const attempts = new Map(); // простая защита от перебора (на один экземпляр функции)
 
   const userKey = (email) => `users/${sha(email)}`;
@@ -128,7 +135,7 @@ function createApi({ store, env = process.env, fetchImpl = fetch, now = () => Da
     const user = s && await getUserById(s.uid);
     // tokenVer растёт при смене пароля — старые сессии перестают действовать
     if (!user || (user.tokenVer || 0) !== s.ver) throw fail(401, 'Требуется вход', 'AUTH');
-    return user;
+    return markOwner(user);
   }
 
   const mailConfigured = () => !!(env.RESEND_API_KEY && env.MAIL_FROM && env.APP_URL);
@@ -184,7 +191,7 @@ function createApi({ store, env = process.env, fetchImpl = fetch, now = () => Da
         settings: {}, createdAt: ts, consentAt: ts, tokenVer: 0, pendingPayments: [] };
       await store.set(userKey(email), user);
       await store.set(`u/${user.id}`, { key: userKey(email) });
-      return json(201, { user: publicUser(user) }, { 'Set-Cookie': sessionCookie(req, user) });
+      return json(201, { user: publicUser(markOwner(user)) }, { 'Set-Cookie': sessionCookie(req, user) });
     }
     if (path === '/auth/forgot' && method === 'POST') {
       throttle(req);
@@ -215,7 +222,7 @@ function createApi({ store, env = process.env, fetchImpl = fetch, now = () => Da
       user.passwordHash = await hashPassword(password);
       user.tokenVer = (user.tokenVer || 0) + 1;
       await store.set(userKey(user.email), user);
-      return json(200, { user: publicUser(user) }, { 'Set-Cookie': sessionCookie(req, user) });
+      return json(200, { user: publicUser(markOwner(user)) }, { 'Set-Cookie': sessionCookie(req, user) });
     }
     if (path === '/auth/login' && method === 'POST') {
       throttle(req);
@@ -224,7 +231,7 @@ function createApi({ store, env = process.env, fetchImpl = fetch, now = () => Da
       const user = await store.get(userKey(email));
       const ok = user && await checkPassword(String(b.password || ''), user.passwordHash);
       if (!ok) throw fail(401, 'Неверный email или пароль');
-      return json(200, { user: publicUser(user) }, { 'Set-Cookie': sessionCookie(req, user) });
+      return json(200, { user: publicUser(markOwner(user)) }, { 'Set-Cookie': sessionCookie(req, user) });
     }
     if (path === '/auth/logout' && method === 'POST') {
       return json(200, { ok: true }, { 'Set-Cookie': `${COOKIE}=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0` });
@@ -342,7 +349,7 @@ function createApi({ store, env = process.env, fetchImpl = fetch, now = () => Da
     if (path === '/billing/sync' && method === 'POST') {
       for (const id of user.pendingPayments || []) { try { await settle(id); } catch (e) { console.error('sync', e.message); } }
       const fresh = await getUserById(user.id);
-      return json(200, { user: publicUser(fresh) });
+      return json(200, { user: publicUser(markOwner(fresh)) });
     }
     throw fail(404, 'Не найдено');
   }
