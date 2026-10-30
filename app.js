@@ -328,12 +328,19 @@
       (o.notes ? '<p class="foot">' + esc(o.notes).replace(/\n/g, '<br>') + '</p>' : '') +
       (pro ? '' : '<div class="wm">Создано в МастерКалькулятор (бесплатный тариф). Перейдите на PRO, чтобы убрать эту пометку.</div>');
   }
+  let currentKp = '';
   function openKp(o) {
     const html = kpHtml(o);
-    $('#kp-preview').innerHTML = html; $('#kp-print').innerHTML = html;
+    $('#kp-preview').innerHTML = html; $('#kp-printcopy').innerHTML = html; currentKp = html;
     $('#kp-dialog').showModal();
   }
   $('#kp-close').onclick = () => $('#kp-dialog').close();
+  $('#kp-open').onclick = () => {
+    const css = 'body{font:14px/1.4 -apple-system,Arial,sans-serif;color:#111;margin:0;padding:16px;background:#fff}.kp-head{display:flex;justify-content:space-between;gap:16px;border-bottom:3px solid #111;padding-bottom:12px;margin-bottom:16px;flex-wrap:wrap}.kp-brand{font-size:26px;font-weight:800;letter-spacing:.06em}.kp h2{font-size:18px;margin:0 0 4px}.kp-meta{text-align:right;font-size:13px}table{width:100%;border-collapse:collapse;margin:14px 0}th,td{border:1px solid #999;padding:8px 10px;text-align:left;vertical-align:top}th{background:#eee;font-size:13px}.n{text-align:right;white-space:nowrap}.sum{text-align:right;font-size:18px;font-weight:800;margin:8px 0 16px}.foot{font-size:13px;color:#333}.wm{margin-top:18px;font-size:11px;color:#888;border-top:1px solid #ccc;padding-top:8px}';
+    const doc = '<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Коммерческое предложение</title><style>' + css + '</style></head><body><div class="kp">' + currentKp + '</div></body></html>';
+    const url = URL.createObjectURL(new Blob([doc], { type: 'text/html;charset=utf-8' }));
+    if (!window.open(url, '_blank')) toast('Разрешите открытие новых вкладок в Safari');
+  };
   $('#kp-print').onclick = () => { $('#kp-dialog').close(); setTimeout(() => window.print(), 50); };
 
   // ---------- Тарифы и оплата ----------
